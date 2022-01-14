@@ -1,19 +1,30 @@
+from glob import glob
 import RPi.GPIO as GPIO
 from gpiozero import Buzzer
 from time import sleep
-import time
+import time, sys
 
 
-seventh_notes = [] # this contains the time for everytime a seventh note appears
-user_notes = [] # this contains the time for everytime the user presses the button
-
-# At the end the program will determine how close the user was when pressing the button and give a score.
-# ie score will not be "kept" during the playing process.
-# The program is nice and compares the times with the least difference when calculating score
-
-def init(pin):
+def init(pin): # Simply intilializes the buzzer to be used for playing songs.
     return Buzzer(pin)
 
+
+
+'''
+This section plays the musical notes on a Piezo Buzzer using gpiozero library instead of RPi.GPIO
+Special thanks to:
+https://www.linuxcircle.com/2015/04/12/how-to-play-piezo-buzzer-tunes-on-raspberry-pi-gpio-with-pwm/
+3 functions:
+- buzz(pitch, duration)
+- play_note(note, beat)
+- play_music(scores)
+
+
+This library was written by: fongkahchun86
+Link to library: https://github.com/fongkahchun86/gpiozero_pwm_buzzer/security
+
+This library was modified to work with the project needs.
+'''
 
 #Note's frequency based on Scientific pitch number
 #Rest is denoted as 'R'.
@@ -82,8 +93,8 @@ def play_note(note, beat,bpm,bz):
     buzz(curr_pitch, duration,bz)
     sleep(duration * 0.5)
 
-def play_music(scores,bpm,bz):
-    global seventh_notes
+def play_music(scores,bpm,bz, preview):
+    global seventh_notes, skipSong, playMode
     '''
     Buzzer will play a list of scores in string.
     To play the middle octave with sharp or flat notes for one beat each:
@@ -97,7 +108,7 @@ def play_music(scores,bpm,bz):
         tune = curr_note.split(':')[0]
         beat = float(curr_note.split(':')[1])
         if tune != "R":
-            if counter >= 6:
+            if counter >= 6 and not preview:
                 seventh_notes.append(time.time()) # only the time of the seventh notes is recorded.
             GPIO.output(leds[counter],GPIO.HIGH)
             play_note(tune, beat,bpm,bz) # This doubles as a "wait until note stops playing to continue"
@@ -111,7 +122,15 @@ def play_music(scores,bpm,bz):
                 counter += 1
         else: 
             play_note(tune, beat,bpm,bz)
-
+        if skipSong and preview: # The user can only skip songs during the preview, not when they are playing.
+            skipSong = False
+            return False
+        if playMode:
+            return False
+    return True
+'''
+End of library.
+'''
         
 
 
@@ -121,28 +140,66 @@ GPIO.setwarnings(False)
 
 buzzer = init(20)
 DUST_BPM = 150
-STOP_BPM = 188
-TAKE_BPM = 330
+STOP1_BPM = 188
+STOP2_BPM = 300
+TAKE_BPM = 338
 
 leds = [25,11,10,23,18,15,14]
+score_leds = [6,13,19]
 
-beatBtn = GPIO.setup(3,GPIO.IN)
+beatBtn = GPIO.setup(3,GPIO.IN, pull_up_down=GPIO.PUD_UP) # This button is used for playing the game and selecting the song.
+nextBtn = GPIO.setup(4,GPIO.IN, pull_up_down=GPIO.PUD_UP) # This button is used to skip songs when selecting a song.
+endBtn = GPIO.setup(2,GPIO.IN, pull_up_down=GPIO.PUD_UP) # This button is used to end the program.
+
+skipSong = False # Used for skipping songs when the user previews them
+playMode = False # This is used to switch between different modes with the beatBtn. (play beat/select song.3)
+currentPreview = 0 # Used to keep track of which song the user is previewing.
+selectedSong = 0 # Used to store which song the user wants to play.
+timeOfLastSelection = time.time() # Used to debounce button signal when selecting a song.
+
 
 def beatBtnCallback(x):
-    global user_notes
-    try:
-        if time.time() - user_notes[-1] > 1: # some debounce checking because duplicates are sometimes given.
-            print('Button pressed! This event has been logged.')
+    global user_notes,playMode, currentPreview, selectedSong, timeOfLastSelection
+    if playMode:
+        try:
+            if time.time() - timeOfLastSelection > 0.2:
+                if time.time() - user_notes[-1] > 1: # some debounce checking because duplicates are sometimes given.
+                    print('Button pressed! This event has been logged.')
+                    user_notes.append(time.time())
+        except: # This means that the first button press will be logged. There is nothing else to compare it to.
+  
+            print('Button pressed! This FIRST event has been logged.')
             user_notes.append(time.time())
-    except: # This means that the first button press will be logged. There is nothing else to compare it to.
-        print('Button pressed! This FIRST event has been logged.')
-        user_notes.append(time.time())
+    else:
+        print("selected song")
+        timeOfLastSelection = time.time()
+        selectedSong = currentPreview
+        playMode = True
 
+def skipBtnCallback(x):
+    global skipSong
+    print("Skipping Song...")
+    skipSong = True
+
+def endBtnCallback(x):
+    print('Ending program')
+    for led in leds:
+        GPIO.output(led,GPIO.LOW)
+    for led in score_leds:
+        GPIO.output(led,GPIO.LOW)
+    GPIO.cleanup(GPIO.BCM)
+    sys.exit()
 
 GPIO.add_event_detect(3,GPIO.RISING,callback=beatBtnCallback)
+GPIO.add_event_detect(4,GPIO.RISING,callback=skipBtnCallback)
+GPIO.add_event_detect(2,GPIO.RISING,callback=endBtnCallback)
+
 
 # Setup each LED
 for led in leds:
+        GPIO.setup(led,GPIO.OUT)
+        GPIO.output(led,GPIO.LOW)
+for led in score_leds:
         GPIO.setup(led,GPIO.OUT)
         GPIO.output(led,GPIO.LOW)
 
@@ -174,12 +231,24 @@ dust = ['F4:0.25','E4:0.25','C4:1','C4:1','C4:1','R:0.375','C4:0.125',
         'F4:0.25','F4:0.25','F4:0.25','A4:0.5','A4:0.5','A4:0.75','A4:0.25', 
         'E4:0.25','E4:0.25','E4:0.5','G4:0.5', 'E4:0.25','A4:1.25','F4:0.25','E4:0.25','C4:0.5']
 
-stop = ['G4:0.5','G4:0.5','F4:1','F4:0.5','F4:0.5','A4:0.5','C5:0.5','F5:0.5',
-        'E5:1','R:0.5','C5:0.5','A4:0.5','G4:1','F4:1.5','R:1.5','A4:0.25','G4:0.75',
+stop1 = ['G4:0.5','G4:0.5','F4:1','F4:0.5','F4:0.5','A4:0.5','C5:0.5','F5:0.5',
+        'E5:1','R:0.5','C5:0.5','A4:0.5','G4:1','F4:1.5','R:0.25','A4:0.25','G4:0.75',
         'G4:0.25','E4:0.25','G4:1','D4:0.5','A4:1','B4:1','C5:2.5','R:1','D5:0.5','E5:0.5',
         'F5:3','R:0.5','F4:0.5','A5:1','B5:0.5','A5:1','G5:1','F5:2','D5:1.5','R:0.5',
         'F4:0.5','A5:0.5','A5:0.5','B5:0.5','A5:1.5','R:0.5','G5:0.5','F#5:0.5','G5:1',
-        'A5:1.5','D5:1','B5:0.5','R:1','A5:0.5','R:0.5','G5:0.5','R:0.5','B4:2.5'] # Ended on the first "Dont stop me now" long note
+        'A5:1.5','D5:1','B5:0.5','R:1','A5:0.5','R:0.5','G5:0.5','R:0.5','B4:2.5','B5:0.5',
+        'R:1','A5:0.5','R:0.5','G5:0.5','G5:0.5','G5:0.5'] # After this note BPM changes.
+    
+stop2 = ['B4:0.5','B4:0.5','B4:0.5','C5:1','D5:1.5','E5:0.5','E5:0.5','E5:0.5',
+         'F5:1','G5:0.5','A4:0.5','A4:0.5','G4:0.5','F4:0.5','F4:1','F4:0.5','A4:0.5',
+         'C5:0.5','F5:0.5','E5:2.5','C5:0.5','A4:0.5','G4:1','F4:0.5','R:0.5','F4:0.5',
+         'A4:0.5','G4:0.5','F4:0.5','G4:1','G4:1.5','A4:0.5','B4:1','C5:2.5','R:1',
+         'A4:0.5','A4:0.5','G4:0.5','F4:0.5','F4:1','R:0.5','C5:0.5','F5:0.5','E5:2','C5:0.5',
+         'A5:0.5','A5:0.5','A5:0.5','G5:1','F5:1.5','R:0.5','A4:0.5','G4:0.5','F4:0.5','G4:0.5',
+         'R:1','A4:0.5','R:1','B4:1','R:0.5','C5:1','C5:0.5','D5:0.5','E5:1','F5:3','R:0.5',
+         'C5:0.5','A5:1','B5:0.5','A5:1','G5:1','F5:2','D5:1.5','R:0.5','A5:0.5','A5:0.5',
+         'A5:0.5','B5:0.5','A5:1','G5:0.5','G5:0.5','G5:0.5','F#5:0.5','F#5:0.5','F#5:0.5',
+         'F#5:0.5','G5:0.5','A5:0.5','R:0.5','A5:3'] 
 
 take = ['F5:0.5','F5:0.5','D5:0.5','B4:0.5','R:0.5','B4:0.5','R:0.5','E5:0.5',
         'R:0.5','E5:0.5','R:0.5','E5:0.5','G5:0.5','G5:0.5','A5:0.5','B5:0.5',
@@ -202,9 +271,38 @@ take = ['F5:0.5','F5:0.5','D5:0.5','B4:0.5','R:0.5','B4:0.5','R:0.5','E5:0.5',
         'G3:0.5','F3:0.5','R:1','C4:4','G4:4','A4:4','E4:1','R:0.5','F4:0.5','R:1','E4:1',
         'A4:4','E5:4','F5:4','E4:1','R:0.5','F4:0.5','R:1','E4:1','C5:4','G5:4','A5:4','R:1',
         'G5:0.5','A5:1','G5:0.5','F5:1','R:1','C6:6']
-                
-#play_music(dust,DUST_BPM,buzzer)
-#play_music(stop,STOP_BPM,buzzer)
-play_music(take,TAKE_BPM,buzzer)
-print(seventh_notes)
-print(user_notes)
+
+songs = [
+    [dust],
+    [stop1,stop2], 
+    [take]
+]
+
+songs_bpm = {
+    0: [DUST_BPM],
+    1: [STOP1_BPM,STOP2_BPM],
+    2: [TAKE_BPM]
+}
+
+if __name__ == "__main__":
+    while True:
+        playMode = False
+        seventh_notes = [] # this contains the time for everytime a seventh note appears
+        user_notes = [] # this contains the time for everytime the user presses the button
+        while not playMode:
+            # Get the users selected song.
+            for i in range(len(songs)):
+                currentPreview = i
+                for j in range(len(songs[i])): # This is for songs with multiple parts
+                    print("Playing song with BPM:",str(songs_bpm[i])) # DELETE
+                    
+                    tmp = play_music(songs[i][j],songs_bpm[i][j],buzzer, True)
+                    if not tmp: # This is needed because for multi-part songs, the user might just skip to the next part and not the next song.
+                        break
+                if playMode:
+                    break
+
+        print("Selected song is song number",str(selectedSong))
+        #print(seventh_notes)
+        #print(user_notes)
+        time.sleep(1)
