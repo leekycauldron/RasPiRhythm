@@ -122,6 +122,7 @@ GPIO.setwarnings(False)
 buzzer = init(20)
 DUST_BPM = 150
 STOP_BPM = 188
+TAKE_BPM = 330
 
 leds = [25,11,10,23,18,15,14]
 
@@ -129,8 +130,13 @@ beatBtn = GPIO.setup(3,GPIO.IN)
 
 def beatBtnCallback(x):
     global user_notes
-    print('Button pressed! This event has been logged.')
-    user_notes.append(time.time())
+    try:
+        if time.time() - user_notes[-1] > 1: # some debounce checking because duplicates are sometimes given.
+            print('Button pressed! This event has been logged.')
+            user_notes.append(time.time())
+    except: # This means that the first button press will be logged. There is nothing else to compare it to.
+        print('Button pressed! This FIRST event has been logged.')
+        user_notes.append(time.time())
 
 
 GPIO.add_event_detect(3,GPIO.RISING,callback=beatBtnCallback)
@@ -174,8 +180,31 @@ stop = ['G4:0.5','G4:0.5','F4:1','F4:0.5','F4:0.5','A4:0.5','C5:0.5','F5:0.5',
         'F5:3','R:0.5','F4:0.5','A5:1','B5:0.5','A5:1','G5:1','F5:2','D5:1.5','R:0.5',
         'F4:0.5','A5:0.5','A5:0.5','B5:0.5','A5:1.5','R:0.5','G5:0.5','F#5:0.5','G5:1',
         'A5:1.5','D5:1','B5:0.5','R:1','A5:0.5','R:0.5','G5:0.5','R:0.5','B4:2.5'] # Ended on the first "Dont stop me now" long note
+
+take = ['F5:0.5','F5:0.5','D5:0.5','B4:0.5','R:0.5','B4:0.5','R:0.5','E5:0.5',
+        'R:0.5','E5:0.5','R:0.5','E5:0.5','G5:0.5','G5:0.5','A5:0.5','B5:0.5',
+        'A5:0.5','A5:0.5','A5:0.5','E5:0.5','R:0.5','D5:0.5','R:0.5','F5:0.5',
+        'R:0.5','F5:0.5','R:0.5','F5:0.5','E5:0.5','E5:0.5','F5:0.5','E5:0.5',
+        'F5:0.5','F5:0.6','D5:0.5','B4:0.5','R:0.5','B4:0.5','R:0.5','E5:0.5',
+        'R:0.5','E5:0.5','R:0.5','E5:0.5','G5:0.5','G5:0.5','A5:0.5','B5:0.5',
+        'A5:0.5','A5:0.5','A5:0.5','E5:0.5','R:0.5','D5:0.5','R:0.5','F5:0.5',
+        'R:0.5','F5:0.5','R:0.5','F5:0.5','E5:0.5','E5:0.5','F5:0.5','E5:0.5',
+        'F5:0.5','F5:0.6','D5:0.5','B4:0.5','R:0.5','B4:0.5','R:0.5','E5:0.5',
+        'R:0.5','E5:0.5','R:0.5','E5:0.5','G5:0.5','G5:0.5','A5:0.5','B5:0.5',
+        'A5:0.5','A5:0.5','A5:0.5','E5:0.5','R:0.5','D5:0.5','R:0.5','F5:0.5',
+        'R:0.5','F5:0.5','R:0.5','F5:0.5','E5:0.5','E5:0.5','F5:0.5','E5:0.5',
+        'D4:1.5','D4:0.5','R:0.5','C4:0.5','B3:1','R:2','C4:0.5','C4:0.5',
+        'R:0.5','C4:0.5','R:0.5','A3:0.5','R:1','R:0.5','F4:0.5','R:0.5','F4:0.5',
+        'F4:1','E4:1','D4:1','D4:0.5','D4:0.5','C4:0.5','R:0.5','B3:0.5','R:3.5',
+        'B3:0.5','C4:1','D4:0.5','C4:0.5','R:0.5','B3:0.5','R:0.5','A3:0.5','R:0.5',
+        'B3:0.5','R:0.5','C4:0.5','B3:1','A3:1','D4:1','D4:1','D4:0.5','D4:0.5','R:5',
+        'A3:0.5','A3:0.5','A3:0.5','A3:0.5','A3:0.5','A3:0.5','A3:0.5','G3:0.5','R:1',
+        'G3:0.5','F3:0.5','R:1','C4:4','G4:4','A4:4','E4:1','R:0.5','F4:0.5','R:1','E4:1',
+        'A4:4','E5:4','F5:4','E4:1','R:0.5','F4:0.5','R:1','E4:1','C5:4','G5:4','A5:4','R:1',
+        'G5:0.5','A5:1','G5:0.5','F5:1','R:1','C6:6']
                 
 #play_music(dust,DUST_BPM,buzzer)
-play_music(stop,STOP_BPM,buzzer)
+#play_music(stop,STOP_BPM,buzzer)
+play_music(take,TAKE_BPM,buzzer)
 print(seventh_notes)
 print(user_notes)
