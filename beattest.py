@@ -1,9 +1,8 @@
-from math import floor
 import RPi.GPIO as GPIO
 from gpiozero import Buzzer
 from time import sleep
 import time, sys
-from beatsongs import songs, songs_bpm
+from beatsongs import songs, songs_bpm, songs_difficulty
 
 
 '''
@@ -16,7 +15,10 @@ https://www.linuxcircle.com/2015/04/12/how-to-play-piezo-buzzer-tunes-on-raspber
 - play_music(scores)
 
 
-This library was written by: fongkahchun86
+**!IMPORTANT**
+
+
+THIS LIBRARY WAS WRITTEN BY: fongkahchun86
 Link to library: https://github.com/fongkahchun86/gpiozero_pwm_buzzer
 **COMMENTS created by the author are kept in the code**
 
@@ -137,7 +139,6 @@ End of library.
 '''
         
 
-
 GPIO.setmode(GPIO.BCM)
 GPIO.setwarnings(False)
 
@@ -145,13 +146,13 @@ GPIO.setwarnings(False)
 buzzer = init(20)
 
 
-mute = True # Mutes the buzzer (program still works)
+mute = False # Mutes the buzzer (program still works)
 
 seventh_notes = []
 user_notes = []
 
 leds = [25,11,10,23,18,15,14]
-score_leds = [6,13,19]
+score_leds = [6,21,19]
 
 beatBtn = GPIO.setup(3,GPIO.IN, pull_up_down=GPIO.PUD_UP) # This button is used for playing the game and selecting the song.
 nextBtn = GPIO.setup(4,GPIO.IN, pull_up_down=GPIO.PUD_UP) # This button is used to skip songs when selecting a song.
@@ -197,7 +198,7 @@ def endBtnCallback(x):
     sys.exit()
 
 def getScore(seventh_notes,user_notes):
-    score = len(seventh_notes) * 10
+    score = len(seventh_notes)
     ogscore = score
     differences = []
     print("OG Score:",str(score))
@@ -247,6 +248,8 @@ if __name__ == "__main__":
             # Get the users selected song.
             for i in range(len(songs)):
                 currentPreview = i
+                for num in songs_difficulty[i]:
+                    GPIO.output(score_leds[num],GPIO.HIGH)
                 for j in range(len(songs[i])): # This is for songs with multiple parts
                     print("Playing song with BPM:",str(songs_bpm[i])) # DELETE
                     
@@ -255,11 +258,17 @@ if __name__ == "__main__":
                         break
                 if playMode:
                     break
+                # Reset the difficulty indicator LEDs after each song preview.
+                for led in score_leds: # This resets the difficulty display and will be now used to display score.
+                    GPIO.output(led,GPIO.LOW)
             #############################
+                
         print("Selected song is song number",str(selectedSong))
         
         
         time.sleep(1)
+        for led in score_leds: # This resets the difficulty display and will be now used to display score.
+            GPIO.output(led,GPIO.LOW)
         # play the song selected and listen for button presses
         for i in range(len(songs[selectedSong])):
             play_music(songs[selectedSong][i],songs_bpm[selectedSong][i],buzzer,False)
