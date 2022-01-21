@@ -1,13 +1,9 @@
-from glob import glob
+from math import floor
 import RPi.GPIO as GPIO
 from gpiozero import Buzzer
 from time import sleep
 import time, sys
-
-
-def init(pin): # Simply intilializes the buzzer to be used for playing songs.
-    return Buzzer(pin)
-
+from beatsongs import songs, songs_bpm
 
 
 '''
@@ -21,10 +17,15 @@ https://www.linuxcircle.com/2015/04/12/how-to-play-piezo-buzzer-tunes-on-raspber
 
 
 This library was written by: fongkahchun86
-Link to library: https://github.com/fongkahchun86/gpiozero_pwm_buzzer/security
+Link to library: https://github.com/fongkahchun86/gpiozero_pwm_buzzer
+**COMMENTS created by the author are kept in the code**
+
 
 This library was modified to work with the project needs.
 '''
+
+def init(pin):
+    return Buzzer(pin)
 
 #Note's frequency based on Scientific pitch number
 #Rest is denoted as 'R'.
@@ -50,6 +51,7 @@ notes = {'C'  : [16.352, 32.703, 65.406, 130.81, 261.63, 523.25, 1046.5, 2093.0,
             }
 
 def buzz(pitch, duration,bz):
+    global mute
     '''
     Cause the buzzer to produce a buzz according to a pitch in a note frequency number (Hz)
     for a duration in seconds.
@@ -64,9 +66,11 @@ def buzz(pitch, duration,bz):
     cycles = int(round(duration * pitch, 0)) #the number of waves to produce is the duration times the frequency
     
     for i in range(cycles):
-        bz.on()
+        if not mute:
+            bz.on()
         sleep(delay)
-        bz.off()
+        if not mute:
+            bz.off()
         sleep(delay)
         
 def play_note(note, beat,bpm,bz):
@@ -125,7 +129,7 @@ def play_music(scores,bpm,bz, preview):
         if skipSong and preview: # The user can only skip songs during the preview, not when they are playing.
             skipSong = False
             return False
-        if playMode:
+        if playMode and preview:
             return False
     return True
 '''
@@ -139,10 +143,12 @@ GPIO.setwarnings(False)
 
 
 buzzer = init(20)
-DUST_BPM = 150
-STOP1_BPM = 188
-STOP2_BPM = 300
-TAKE_BPM = 338
+
+
+mute = True # Mutes the buzzer (program still works)
+
+seventh_notes = []
+user_notes = []
 
 leds = [25,11,10,23,18,15,14]
 score_leds = [6,13,19]
@@ -190,6 +196,27 @@ def endBtnCallback(x):
     GPIO.cleanup(GPIO.BCM)
     sys.exit()
 
+def getScore(seventh_notes,user_notes):
+    score = len(seventh_notes) * 10
+    ogscore = score
+    differences = []
+    print("OG Score:",str(score))
+    for note in seventh_notes:
+        closest = 999 # This is placeholder
+        toAppend = 0
+        for unote in user_notes:
+            
+            if abs(note - unote) < closest: # If the difference is closest to the note then that is what will determine the score depending on how accurate the user was.
+                closest = abs(note - unote) # Difference in seconds from when the user is supposed to click the beat and when the user DOES click the beat.
+                toAppend = closest
+        score -= closest
+        differences.append(toAppend)
+    print(differences) # show the differences in seconds for each note.
+    
+    return score, ogscore
+
+
+
 GPIO.add_event_detect(3,GPIO.RISING,callback=beatBtnCallback)
 GPIO.add_event_detect(4,GPIO.RISING,callback=skipBtnCallback)
 GPIO.add_event_detect(2,GPIO.RISING,callback=endBtnCallback)
@@ -203,89 +230,16 @@ for led in score_leds:
         GPIO.setup(led,GPIO.OUT)
         GPIO.output(led,GPIO.LOW)
 
-dust_notes = []
+GPIO.output(score_leds[1],GPIO.LOW)
 
 
-notes_indexes = ['C','C#','Db','D','D#','Eb','E','F','F#','Gb','G','G#','Ab','A','A#','Bb','B']
-
-dust = ['F4:0.25','E4:0.25','C4:1','C4:1','C4:1','R:0.375','C4:0.125',
-        'C4:0.5','C4:0.5','E4:0.5','C4:0.25','F4:1.25','R:0.25',
-        'F4:0.25','E4:0.25','C4:1','C4:1','C4:1','R:0.375','C4:0.125',
-        'C4:0.5','C4:0.5','E4:0.5','C4:0.25','F4:1.25','R:0.25',
-        'F4:0.25','E4:0.25','E4:0.25','E4:0.25','E4:0.5','E4:0.25','E4:0.25',
-        'E4:0.25','G4:0.75','E4:0.5','E4:0.5','E4:0.25','E4:0.25','B4:0.5','B4:0.5',
-        'A4:0.25','B4:0.5','A4:1.25','R:0.5','E4:0.25','E4:0.25','E4:0.5',
-        'E4:0.5','E4:0.5','E4:0.25','E4:0.25','G4:0.25','G4:0.25','G4:0.25',
-        'A4:1','A4:0.25','B4:0.5','B4:0.5','B4:0.25','B4:0.25','B4:0.25',
-        'A4:1.75','B4:0.25','B4:0.25','C5:0.25','C5:0.5','C5:0.75','C5:0.25','C5:0.25',
-        'D5:0.25','D5:0.25','D5:0.25','F5:0.75','G4:0.25','G4:0.25','C5:0.25',
-        'C5:0.25','C5:0.25','C5:0.25','C5:0.25','C5:0.25','C5:0.25','D5:1.25','R:1',
-        'C5:0.25','C5:0.25','C5:0.25','C5:0.5','C5:0.5','C5:0.25','D5:0.25','D5:0.5',
-        'D5:1.25','R:0.5','A4:0.25','A4:0.25','A4:0.25','A4:0.25','A4:0.25','B4:1.25',
-        'G4:0.5','F4:0.25','E4:0.25','C4:1','C4:1','C4:1','R:0.75','C4:0.25',
-        'E4:0.25','E4:0.25','E4:0.5','G4:0.5','E4:0.25','A4:1.25','R:0.5','F4:0.25','E4:0.25',
-        'C4:1','C4:1','C4:1','R:0.75','C4:0.25', 'E4:0.25','E4:0.25','E4:0.5','G4:0.5',
-        'E4:0.25','A4:1.25','R:0.5','B4:0.25','B4:0.25','A4:0.25','A4:0.25','G4:0.5',
-        'E4:0.5','B4:0.25','B4:0.25','A4:0.25','A4:0.25','G4:0.5','E4:0.75','B4:0.25',
-        'B4:0.25','B4:0.25','B4:0.5','B4:0.25','B4:0.25','A4:1.5','F4:1.25',
-        'F4:0.25','F4:0.25','F4:0.25','A4:0.5','A4:0.5','A4:0.75','A4:0.25', 
-        'E4:0.25','E4:0.25','E4:0.5','G4:0.5', 'E4:0.25','A4:1.25','F4:0.25','E4:0.25','C4:0.5']
-
-stop1 = ['G4:0.5','G4:0.5','F4:1','F4:0.5','F4:0.5','A4:0.5','C5:0.5','F5:0.5',
-        'E5:1','R:0.5','C5:0.5','A4:0.5','G4:1','F4:1.5','R:0.25','A4:0.25','G4:0.75',
-        'G4:0.25','E4:0.25','G4:1','D4:0.5','A4:1','B4:1','C5:2.5','R:1','D5:0.5','E5:0.5',
-        'F5:3','R:0.5','F4:0.5','A5:1','B5:0.5','A5:1','G5:1','F5:2','D5:1.5','R:0.5',
-        'F4:0.5','A5:0.5','A5:0.5','B5:0.5','A5:1.5','R:0.5','G5:0.5','F#5:0.5','G5:1',
-        'A5:1.5','D5:1','B5:0.5','R:1','A5:0.5','R:0.5','G5:0.5','R:0.5','B4:2.5','B5:0.5',
-        'R:1','A5:0.5','R:0.5','G5:0.5','G5:0.5','G5:0.5'] # After this note BPM changes.
-    
-stop2 = ['B4:0.5','B4:0.5','B4:0.5','C5:1','D5:1.5','E5:0.5','E5:0.5','E5:0.5',
-         'F5:1','G5:0.5','A4:0.5','A4:0.5','G4:0.5','F4:0.5','F4:1','F4:0.5','A4:0.5',
-         'C5:0.5','F5:0.5','E5:2.5','C5:0.5','A4:0.5','G4:1','F4:0.5','R:0.5','F4:0.5',
-         'A4:0.5','G4:0.5','F4:0.5','G4:1','G4:1.5','A4:0.5','B4:1','C5:2.5','R:1',
-         'A4:0.5','A4:0.5','G4:0.5','F4:0.5','F4:1','R:0.5','C5:0.5','F5:0.5','E5:2','C5:0.5',
-         'A5:0.5','A5:0.5','A5:0.5','G5:1','F5:1.5','R:0.5','A4:0.5','G4:0.5','F4:0.5','G4:0.5',
-         'R:1','A4:0.5','R:1','B4:1','R:0.5','C5:1','C5:0.5','D5:0.5','E5:1','F5:3','R:0.5',
-         'C5:0.5','A5:1','B5:0.5','A5:1','G5:1','F5:2','D5:1.5','R:0.5','A5:0.5','A5:0.5',
-         'A5:0.5','B5:0.5','A5:1','G5:0.5','G5:0.5','G5:0.5','F#5:0.5','F#5:0.5','F#5:0.5',
-         'F#5:0.5','G5:0.5','A5:0.5','R:0.5','A5:3'] 
-
-take = ['F5:0.5','F5:0.5','D5:0.5','B4:0.5','R:0.5','B4:0.5','R:0.5','E5:0.5',
-        'R:0.5','E5:0.5','R:0.5','E5:0.5','G5:0.5','G5:0.5','A5:0.5','B5:0.5',
-        'A5:0.5','A5:0.5','A5:0.5','E5:0.5','R:0.5','D5:0.5','R:0.5','F5:0.5',
-        'R:0.5','F5:0.5','R:0.5','F5:0.5','E5:0.5','E5:0.5','F5:0.5','E5:0.5',
-        'F5:0.5','F5:0.6','D5:0.5','B4:0.5','R:0.5','B4:0.5','R:0.5','E5:0.5',
-        'R:0.5','E5:0.5','R:0.5','E5:0.5','G5:0.5','G5:0.5','A5:0.5','B5:0.5',
-        'A5:0.5','A5:0.5','A5:0.5','E5:0.5','R:0.5','D5:0.5','R:0.5','F5:0.5',
-        'R:0.5','F5:0.5','R:0.5','F5:0.5','E5:0.5','E5:0.5','F5:0.5','E5:0.5',
-        'F5:0.5','F5:0.6','D5:0.5','B4:0.5','R:0.5','B4:0.5','R:0.5','E5:0.5',
-        'R:0.5','E5:0.5','R:0.5','E5:0.5','G5:0.5','G5:0.5','A5:0.5','B5:0.5',
-        'A5:0.5','A5:0.5','A5:0.5','E5:0.5','R:0.5','D5:0.5','R:0.5','F5:0.5',
-        'R:0.5','F5:0.5','R:0.5','F5:0.5','E5:0.5','E5:0.5','F5:0.5','E5:0.5',
-        'D4:1.5','D4:0.5','R:0.5','C4:0.5','B3:1','R:2','C4:0.5','C4:0.5',
-        'R:0.5','C4:0.5','R:0.5','A3:0.5','R:1','R:0.5','F4:0.5','R:0.5','F4:0.5',
-        'F4:1','E4:1','D4:1','D4:0.5','D4:0.5','C4:0.5','R:0.5','B3:0.5','R:3.5',
-        'B3:0.5','C4:1','D4:0.5','C4:0.5','R:0.5','B3:0.5','R:0.5','A3:0.5','R:0.5',
-        'B3:0.5','R:0.5','C4:0.5','B3:1','A3:1','D4:1','D4:1','D4:0.5','D4:0.5','R:5',
-        'A3:0.5','A3:0.5','A3:0.5','A3:0.5','A3:0.5','A3:0.5','A3:0.5','G3:0.5','R:1',
-        'G3:0.5','F3:0.5','R:1','C4:4','G4:4','A4:4','E4:1','R:0.5','F4:0.5','R:1','E4:1',
-        'A4:4','E5:4','F5:4','E4:1','R:0.5','F4:0.5','R:1','E4:1','C5:4','G5:4','A5:4','R:1',
-        'G5:0.5','A5:1','G5:0.5','F5:1','R:1','C6:6']
-
-songs = [
-    [dust],
-    [stop1,stop2], 
-    [take]
-]
-
-songs_bpm = {
-    0: [DUST_BPM],
-    1: [STOP1_BPM,STOP2_BPM],
-    2: [TAKE_BPM]
-}
+#notes_indexes = ['C','C#','Db','D','D#','Eb','E','F','F#','Gb','G','G#','Ab','A','A#','Bb','B']
 
 if __name__ == "__main__":
     while True:
+
+        for led in score_leds: # This resets the score display.
+            GPIO.output(led,GPIO.LOW)
         playMode = False
         seventh_notes = [] # this contains the time for everytime a seventh note appears
         user_notes = [] # this contains the time for everytime the user presses the button
@@ -297,12 +251,33 @@ if __name__ == "__main__":
                     print("Playing song with BPM:",str(songs_bpm[i])) # DELETE
                     
                     tmp = play_music(songs[i][j],songs_bpm[i][j],buzzer, True)
-                    if not tmp: # This is needed because for multi-part songs, the user might just skip to the next part and not the next song.
+                    if not tmp: # Prevents the skip button from just skipping to the next part of multipart songs and instead moves on to the next song.
                         break
                 if playMode:
                     break
-
+            #############################
         print("Selected song is song number",str(selectedSong))
-        #print(seventh_notes)
-        #print(user_notes)
+        
+        
         time.sleep(1)
+        # play the song selected and listen for button presses
+        for i in range(len(songs[selectedSong])):
+            play_music(songs[selectedSong][i],songs_bpm[selectedSong][i],buzzer,False)
+        print(seventh_notes)
+        print(user_notes)
+        # retrieve the score by comparing times of seventh notes and when the button was pressed
+        score, ogscore = getScore(seventh_notes,user_notes)
+        time.sleep(0.5) # TODO: CHECK/UPDATE RPi.GPIO version.
+        if score >= ogscore * 0.75:
+            print("GREEN")
+            GPIO.output(score_leds[0],GPIO.HIGH)
+            GPIO.output(score_leds[1],GPIO.HIGH)
+            GPIO.output(score_leds[2],GPIO.HIGH)
+        elif score >= ogscore * 0.5:
+            print("YELLOW")
+            GPIO.output(score_leds[0],GPIO.HIGH)
+            GPIO.output(score_leds[1],GPIO.HIGH)
+        else:
+            print("RED")
+            GPIO.output(score_leds[0],GPIO.HIGH)
+        time.sleep(3)
