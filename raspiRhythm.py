@@ -202,16 +202,27 @@ def getScore(seventh_notes,user_notes):
     ogscore = score
     differences = []
     print("OG Score:",str(score))
+    toKeep = [] # keeps track of the which button presses were right.
     for note in seventh_notes:
-        closest = 999 # This is placeholder
+        closest = 999 # This is placeholder. High number(999) means the score will be a negative and not just a perfect score if no buttons are pressed BECAUSE this variable is being subctracted from the score.
         toAppend = 0
         for unote in user_notes:
             
-            if abs(note - unote) < closest: # If the difference is closest to the note then that is what will determine the score depending on how accurate the user was.
+            if abs(note - unote) < closest: # If the difference is closest to the note then that is what will use to determine the score depending on how accurate the user was.
                 closest = abs(note - unote) # Difference in seconds from when the user is supposed to click the beat and when the user DOES click the beat.
                 toAppend = closest
+        toKeep.append(note - closest) # get the unote by undoing equation
         score -= closest
         differences.append(toAppend)
+    # This for loop below is to prevent users from just spamming the button.
+    # This system allows for button spamming to give a decent score but now, for every time the button was pressed and the note did NOT play, the score will be penalized.
+    # This also means that accidentally pressing a button at the wrong note can be punished harshly if the user attempts to fix their mistake.
+    # It is SOMETIMES better to not play a note at all than it is to try to fix a mistake.
+    # If the mistake was made 0.5 seconds away from the green LED then fixing the mistake will be OK.
+    # If the mistake was made less htan 0.5 secondays away from the green LED then fixing the mistake will penalize the score MORE.
+    for itm in range(len(user_notes) - len(toKeep)):
+        print("Button press was incorrect...")
+        score -= 0.5 
     print(differences) # show the differences in seconds for each note.
     
     return score, ogscore
@@ -277,7 +288,7 @@ if __name__ == "__main__":
         # retrieve the score by comparing times of seventh notes and when the button was pressed
         score, ogscore = getScore(seventh_notes,user_notes)
         time.sleep(0.5)
-        if score >= ogscore * 0.75:
+        if score >= ogscore * 0.85:
             print("GREEN")
             GPIO.output(score_leds[0],GPIO.HIGH)
             GPIO.output(score_leds[1],GPIO.HIGH)
