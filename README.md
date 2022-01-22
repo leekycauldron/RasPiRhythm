@@ -7,5 +7,9 @@ Uses open source library by [fongkahchun86](https://github.com/fongkahchun86): h
 
 # IMPORTANT FILES #
 `raspiRhythm.py` is the main file, this is the most up to date file and is the file that should be run.
+<br />
+<br />
 `beatsongs.py` is another mandatory file, this contains all the songs, their bpm and difficulty (use with raspiRhythm.py and beattest.py (beattest is outdated))
+<br />
+<br />
 `beattest.py` is an outdated version of the raspiRhythm.py file. This was to change the file name to a more specific name.
