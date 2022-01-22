@@ -6,7 +6,7 @@ Uses open source library by [fongkahchun86](https://github.com/fongkahchun86): h
 
 
 # IMPORTANT FILES #
-`raspiRhythm.py` is the main file, this is the most up to date file and is the file that should be run.
+`raspiRhythm.py` is the main file, this is the most up to date file and is the file that should be run. Uses the current library (in file gpiozero_pwm_buzzer.py) however this library was modified and will not work with that file and the library is already inside this file so no need to use other files (just this and beatsongs.py).
 <br />
 <br />
 `beatsongs.py` is another mandatory file, this contains all the songs, their bpm and difficulty (use with raspiRhythm.py and beattest.py (beattest is outdated))
