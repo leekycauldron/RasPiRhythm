@@ -1,3 +1,14 @@
+"""
+A rhythm game! Choose from 11 different songs of different difficulties to play from. The player can preview and choose the song they want.
+When playing the song, the user will click the button every seventh beat (look at LEDs to help).
+After each song, the program calculates the score based on when the user pressed the button each time.
+
+
+Written By: Bryson Lee-Kwen
+Date: 2022-01-24
+"""
+
+
 import RPi.GPIO as GPIO
 from gpiozero import Buzzer
 from time import sleep
@@ -6,6 +17,11 @@ from beatsongs import songs, songs_bpm, songs_difficulty
 
 
 '''
+
+
+********!!!LIBRARY!!!********
+
+
 This section plays the musical notes on a Piezo Buzzer using gpiozero library instead of RPi.GPIO
 Special thanks to:
 https://www.linuxcircle.com/2015/04/12/how-to-play-piezo-buzzer-tunes-on-raspberry-pi-gpio-with-pwm/
@@ -109,7 +125,6 @@ def play_music(scores,bpm,bz, preview):
     '''
     counter = 0
     for i in range(len(scores)):
-        print(counter)
         curr_note = scores[i]
         tune = curr_note.split(':')[0]
         beat = float(curr_note.split(':')[1])
@@ -146,7 +161,7 @@ GPIO.setwarnings(False)
 buzzer = init(20)
 
 
-mute = False # Mutes the buzzer (program still works)
+mute = False # Mutes the buzzer.
 
 seventh_notes = []
 user_notes = []
@@ -165,31 +180,32 @@ selectedSong = 0 # Used to store which song the user wants to play.
 timeOfLastSelection = time.time() # Used to debounce button signal when selecting a song.
 
 
+# In preview mode, used to select songs.
+# In play mode, used to click on every seventh beat.
 def beatBtnCallback(x):
     global user_notes,playMode, currentPreview, selectedSong, timeOfLastSelection
     if playMode:
         try:
             if time.time() - timeOfLastSelection > 0.2:
                 if time.time() - user_notes[-1] > 1: # some debounce checking because duplicates are sometimes given.
-                    print('Button pressed! This event has been logged.')
                     user_notes.append(time.time())
-        except: # This means that the first button press will be logged. There is nothing else to compare it to.
-  
-            print('Button pressed! This FIRST event has been logged.')
+
+        except: # This means that the first button press has occured and there is nothing else to compare it to.
             user_notes.append(time.time())
+
     else:
-        print("selected song")
+        # save selected song and switch to play mode.
         timeOfLastSelection = time.time()
         selectedSong = currentPreview
         playMode = True
 
+# Used in preview mode to skip the preview of songs.
 def skipBtnCallback(x):
     global skipSong
-    print("Skipping Song...")
     skipSong = True
 
+# Used to turn off all LED and safely exit the program.
 def endBtnCallback(x):
-    print('Ending program')
     for led in leds:
         GPIO.output(led,GPIO.LOW)
     for led in score_leds:
@@ -197,34 +213,31 @@ def endBtnCallback(x):
     GPIO.cleanup(GPIO.BCM)
     sys.exit()
 
+# Gets the score based on when the seventh beats appear in the song and when the user pressed the button.
 def getScore(seventh_notes,user_notes):
-    score = len(seventh_notes)
-    ogscore = score
-    differences = []
-    print("OG Score:",str(score))
-    toKeep = [] # keeps track of the which button presses were right.
+    score = len(seventh_notes) # Every seventh note brings the start score up by one. (This is to allow fairness betweeen shorter and longer songs)
+    ogscore = score # Used for comparing final score (score) with original score (ogscore).
+    toKeep = [] # keeps track of the which button presses can be related to a seventh beat. All other button presses not in this list will lower score.
     for note in seventh_notes:
         closest = 999 # This is placeholder. High number(999) means the score will be a negative and not just a perfect score if no buttons are pressed BECAUSE this variable is being subctracted from the score.
         toAppend = 0
         for unote in user_notes:
             
-            if abs(note - unote) < closest: # If the difference is closest to the note then that is what will use to determine the score depending on how accurate the user was.
+            if abs(note - unote) < closest: # If the difference in time is closest to the beat then that is the note that is related to the seventh beat (so far).
                 closest = abs(note - unote) # Difference in seconds from when the user is supposed to click the beat and when the user DOES click the beat.
                 toAppend = closest
-        toKeep.append(note - closest) # get the unote by undoing equation
-        score -= closest
-        differences.append(toAppend)
+        toKeep.append(note - closest) # get the the time that the user pressed the button by undoing the subtraction equation.
+        score -= closest # remove the difference in time from the seventh beat to when the button press occurs from the score.
+
     # This for loop below is to prevent users from just spamming the button.
-    # This system allows for button spamming to give a decent score but now, for every time the button was pressed and the note did NOT play, the score will be penalized.
-    # This also means that accidentally pressing a button at the wrong note can be punished harshly if the user attempts to fix their mistake.
+    # The old system allowed for button spamming to give a decent score but now, for every time the button was pressed and a seventh beat did NOT play, the score will be lowered.
+    # This also means that accidentally pressing a button at the wrong note can be punished harshly IF the user attempts to fix their mistake.
     # It is SOMETIMES better to not play a note at all than it is to try to fix a mistake.
-    # If the mistake was made 0.5 seconds away from the green LED then fixing the mistake will be OK.
-    # If the mistake was made less htan 0.5 secondays away from the green LED then fixing the mistake will penalize the score MORE.
-    for itm in range(len(user_notes) - len(toKeep)):
-        print("Button press was incorrect...")
+    # If the mistake was made 0.5 seconds away or more from the green LED then fixing the mistake will be OK because it can't get worse.
+    # If the mistake was made less than 0.5 seconds away from the green LED then fixing the mistake will penalize the score MORE because no matter what 0.5 will be deducted including the time when the user fixes the mistake.
+    for _ in range(len(user_notes) - len(toKeep)):
         score -= 0.5 
-    print(differences) # show the differences in seconds for each note.
-    
+
     return score, ogscore
 
 
@@ -242,62 +255,71 @@ for led in score_leds:
         GPIO.setup(led,GPIO.OUT)
         GPIO.output(led,GPIO.LOW)
 
-GPIO.output(score_leds[1],GPIO.LOW)
 
-
-#notes_indexes = ['C','C#','Db','D','D#','Eb','E','F','F#','Gb','G','G#','Ab','A','A#','Bb','B']
 
 if __name__ == "__main__":
+
     while True:
 
-        for led in score_leds: # This resets the score display.
+
+        for led in score_leds: # This resets the score/difficulty display.
             GPIO.output(led,GPIO.LOW)
         playMode = False
-        seventh_notes = [] # this contains the time for everytime a seventh note appears
-        user_notes = [] # this contains the time for everytime the user presses the button
+        seventh_notes = [] # this contains the time for everytime a seventh beat appears.
+        user_notes = [] # this contains the time for everytime the user presses the button (in play mode).
+
+
         while not playMode:
+
             # Get the users selected song.
             for i in range(len(songs)):
                 currentPreview = i
+
+                # Display the difficulty.
                 for num in songs_difficulty[i]:
                     GPIO.output(score_leds[num],GPIO.HIGH)
-                for j in range(len(songs[i])): # This is for songs with multiple parts
-                    print("Playing song with BPM:",str(songs_bpm[i])) # DELETE
-                    
+
+                # Go through each part in the song (some songs have multiple parts so a for loop will go through each part.)
+                for j in range(len(songs[i])): 
+                    #                song         bpm            buzzer  preview mode
                     tmp = play_music(songs[i][j],songs_bpm[i][j],buzzer, True)
+
+
                     if not tmp: # Prevents the skip button from just skipping to the next part of multipart songs and instead moves on to the next song.
                         break
-                if playMode:
+
+
+                if playMode: # If the song has been chosen, playmode will be true and preview mode will be broken out of.
                     break
+
                 # Reset the difficulty indicator LEDs after each song preview.
-                for led in score_leds: # This resets the difficulty display and will be now used to display score.
+                for led in score_leds:
                     GPIO.output(led,GPIO.LOW)
             #############################
-                
-        print("Selected song is song number",str(selectedSong))
         
         
         time.sleep(1)
+
         for led in score_leds: # This resets the difficulty display and will be now used to display score.
             GPIO.output(led,GPIO.LOW)
-        # play the song selected and listen for button presses
+
+        # play the song selected.
         for i in range(len(songs[selectedSong])):
             play_music(songs[selectedSong][i],songs_bpm[selectedSong][i],buzzer,False)
-        print(seventh_notes)
-        print(user_notes)
+   
+
         # retrieve the score by comparing times of seventh notes and when the button was pressed
         score, ogscore = getScore(seventh_notes,user_notes)
-        time.sleep(0.5)
-        if score >= ogscore * 0.85:
-            print("GREEN")
+
+
+        # Show different LED based on score.
+        if score >= ogscore * 0.9: # keeping >90% of original score will give full points.
             GPIO.output(score_leds[0],GPIO.HIGH)
             GPIO.output(score_leds[1],GPIO.HIGH)
             GPIO.output(score_leds[2],GPIO.HIGH)
-        elif score >= ogscore * 0.5:
-            print("YELLOW")
+        elif score >= ogscore * 0.7: # > 70% of original score give 2/3 points.
             GPIO.output(score_leds[0],GPIO.HIGH)
             GPIO.output(score_leds[1],GPIO.HIGH)
-        else:
-            print("RED")
+        else: # everything below is 1/3 points.
             GPIO.output(score_leds[0],GPIO.HIGH)
         time.sleep(3)
